@@ -75,6 +75,10 @@
 
 
     /**
+    * Is bot playing game?
+    */
+    var BOT = true;
+    /**
      * Default game width.
      * @const
      */
@@ -384,6 +388,11 @@
                 this.createTouchController();
             }
 
+            this.bot_event = null;
+            if(BOT){
+                this.bot_socket = io.connect('/bot');
+            }
+
             this.startListening();
             this.update();
 
@@ -521,20 +530,18 @@
             var now = getTimeStamp();
             var deltaTime = now - (this.time || now);
             this.time = now;
-
             if (this.playing) {
-                if (this.test_save){
-                    $.post(
-                        "http://localhost:123",{
-                            "frame": this.canvas.toDataURL()
-                        },
-                        function(data, status){
-                            console.log(status)
-                            alert("Data is saved")
-                        }
-                    );
-                    this.test_save = false;
-                }
+                var fr_data = this.canvas.toDataURL("image/png");
+                this.bot_socket.emit("recv_frame", "test_data");
+                // $.ajax({
+                //     method: "POST",
+                //     url: "http://localhost:1234/recv/",
+                //     data: {'frame': fr_data},
+                //     success: function(data){
+                //         console.log(data)
+                //     }
+                // });  
+                    
                 this.clearCanvas();
 
                 if (this.tRex.jumping) {
@@ -614,6 +621,7 @@
          */
         handleEvent: function (e) {
             return (function (evtType, events) {
+                console.log(evtType);
                 switch (evtType) {
                     case events.KEYDOWN:
                     case events.TOUCHSTART:
@@ -629,6 +637,22 @@
             }.bind(this))(e.type, Runner.events);
         },
 
+        /**
+        * List functions for bind actions from server
+        */
+        actionMessage: function (e){
+            var action = e.action;
+            var keydown_event = new KeyboardEvent(Runner.events.KEYDOWN, {bubbles: true, cancelable: true});
+            var keyup_event = new KeyboardEvent(Runner.events.KEYUP, {bubbles: true, cancelable: true});
+            delete keydown_event.keyCode;
+            Object.defineProperty(keydown_event, "keyCode", {"value" : action});
+
+            delete keyup_event.keyCode;
+            Object.defineProperty(keyup_event, "keyCode", {"value" : action})
+
+            document.dispatchEvent(keydown_event);
+            document.dispatchEvent(keyup_event);
+        },
         /**
          * Bind relevant key / mouse / touch listeners.
          */
@@ -647,6 +671,10 @@
                 document.addEventListener(Runner.events.MOUSEDOWN, this);
                 document.addEventListener(Runner.events.MOUSEUP, this);
             }
+
+            if (BOT) {
+                this.bot_socket.on("recv_action", this.actionMessage);
+            }
         },
 
         /**
@@ -663,6 +691,10 @@
             } else {
                 document.removeEventListener(Runner.events.MOUSEDOWN, this);
                 document.removeEventListener(Runner.events.MOUSEUP, this);
+            }
+
+            if (BOT) {
+                this.bot_event.removeEventListener('action', this.actionMessage);
             }
         },
 
@@ -722,7 +754,7 @@
             var isjumpKey = Runner.keycodes.JUMP[keyCode] ||
                 e.type == Runner.events.TOUCHEND ||
                 e.type == Runner.events.MOUSEDOWN;
-
+            
             if (this.isRunning() && isjumpKey) {
                 this.tRex.endJump();
             } else if (Runner.keycodes.DUCK[keyCode]) {
