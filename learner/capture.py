@@ -13,11 +13,58 @@ import numpy as np
 from socketio import socketio_manage
 from socketio.namespace import BaseNamespace
 from socketio.mixins import BroadcastMixin
+import Queue
+
+KEYCODES = {
+    'JUMP': ['38', '32'],
+    'DUCK': ['40'],
+    'RESTART': ['13']
+}
+
+FRAME_QUEUE = []
+TRAIN_DATA_QUEUE = []
+GAME_OVER = 0
+GAME_PLAYING = 1
+FRAME_CHANNELS = 4
 
 
 class BotNamespace(BaseNamespace, BroadcastMixin):
-    def on_recv_frame(self, frame):
-        self.emit('recv_action', {"action": "38"})
+    def __init__(self, *args, **kwargs):
+        super(BotNamespace, self).__init__(*args, **kwargs)
+        self.frame_queue = []
+        self.train_data_queue = Queue.Queue()
+
+    def on_recv_frame(self, data):
+        frame = data['frame']
+        action = data['action']
+        game_status = data['game_status']
+
+        # Decode frame and put it in queue
+        frame = frame.replace('data:image/png;base64,', '')
+        frame += '='
+        frame = frame.decode("base64")
+        frame = np.fromstring(frame, np.uint8)
+        frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        if action == 'NONE': 
+            action = 0
+        elif action == 'JUMP': 
+            action = 1
+        else action == 'DUCK':
+            action = 2
+
+        reward = 0.
+        if game_status == GAME_OVER:
+            reward = -100.
+        self.frame_queue.append((gray_frame, action, reward))
+        #self.emit('recv_action', {"action": "38"})
+
+        for i in range(len(self.frame_queue) - 1, len(self.frame_queue) - FRAME_CHANNELS, -1):
+            self.train_data_queue.append([
+                    self.frame_queue[i], self.frame_queue[i-1], 
+                    self.frame_queue[i-2], self.frame_queue[i-3]
+            ])
 
     def recv_connect(self):
         pass
