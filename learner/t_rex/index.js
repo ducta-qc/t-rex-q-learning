@@ -388,9 +388,10 @@
                 this.createTouchController();
             }
 
-            this.bot_event = null;
+            this.botSocket = null;
             if(BOT){
-                this.bot_socket = io.connect('/bot');
+                this.botSocket = io.connect('/bot');
+                this.currAction = "NONE";
             }
 
             this.startListening();
@@ -531,16 +532,9 @@
             var deltaTime = now - (this.time || now);
             this.time = now;
             if (this.playing) {
-                var fr_data = this.canvas.toDataURL("image/png");
-                this.bot_socket.emit("recv_frame", "test_data");
-                // $.ajax({
-                //     method: "POST",
-                //     url: "http://localhost:1234/recv/",
-                //     data: {'frame': fr_data},
-                //     success: function(data){
-                //         console.log(data)
-                //     }
-                // });  
+                var frData = this.canvas.toDataURL("image/png");
+                var gameStatus = 1;
+                //this.botSocket.emit("recv_frame", "test_data");
                     
                 this.clearCanvas();
 
@@ -576,7 +570,14 @@
                         this.currentSpeed += this.config.ACCELERATION;
                     }
                 } else {
+                    gameStatus = 0;
                     this.gameOver();
+                }
+
+                if (BOT){
+                    this.botSocket.emit("recv_frame", 
+                        {frame: frData, action: this.currAction,game_status: gameStatus});
+                    this.currAction = "NONE";
                 }
 
                 var playAchievementSound = this.distanceMeter.update(deltaTime,
@@ -621,7 +622,6 @@
          */
         handleEvent: function (e) {
             return (function (evtType, events) {
-                console.log(evtType);
                 switch (evtType) {
                     case events.KEYDOWN:
                     case events.TOUCHSTART:
@@ -673,7 +673,7 @@
             }
 
             if (BOT) {
-                this.bot_socket.on("recv_action", this.actionMessage);
+                this.botSocket.on("recv_action", this.actionMessage);
             }
         },
 
@@ -694,7 +694,7 @@
             }
 
             if (BOT) {
-                this.bot_event.removeEventListener('action', this.actionMessage);
+                this.botSocket.removeEventListener('action', this.actionMessage);
             }
         },
 
@@ -711,6 +711,8 @@
             if (e.target != this.detailsButton) {
                 if (!this.crashed && (Runner.keycodes.JUMP[e.keyCode] ||
                     e.type == Runner.events.TOUCHSTART)) {
+                    if (BOT) this.currAction = "JUMP";
+                    
                     if (!this.playing) {
                         this.loadSounds();
                         this.playing = true;
@@ -733,6 +735,8 @@
             }
 
             if (this.playing && !this.crashed && Runner.keycodes.DUCK[e.keyCode]) {
+                if (BOT) this.currAction = "DUCK";
+                
                 e.preventDefault();
                 if (this.tRex.jumping) {
                     // Speed drop, activated only when jump key is not pressed.
@@ -756,8 +760,10 @@
                 e.type == Runner.events.MOUSEDOWN;
             
             if (this.isRunning() && isjumpKey) {
+                if (BOT) this.currAction = "JUMP";
                 this.tRex.endJump();
             } else if (Runner.keycodes.DUCK[keyCode]) {
+                if (BOT) this.currAction = "DUCK";
                 this.tRex.speedDrop = false;
                 this.tRex.setDuck(false);
             } else if (this.crashed) {
