@@ -31,6 +31,7 @@ GAME_OVER = 0
 GAME_PLAYING = 1
 FRAME_CHANNELS = 4
 T_REX = None
+TURN = 0
 
 class BotNamespace(BaseNamespace, BroadcastMixin):
     def __init__(self, *args, **kwargs):
@@ -84,9 +85,13 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
         #cv2.imshow('frame', gray_frame)
 
         reward = 0.
+        if game_status == GAME_PLAYING and action == 'JUMP':
+            reward = -5.
+
         if game_status == GAME_OVER:
+            TURN += 1
             reward = -100.
-            #print('reward', reward)
+            
         self.frame_queue.append((resized_frame, action, reward))
 
         if len(self.frame_queue) == 4:
@@ -111,6 +116,9 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
                 self.frame_queue = []
             self.emit('recv_action', {"action": next_action})
 
+        if TURN % 5 == 0:
+            print("Game turn:%d" % TURN)
+
     def recv_connect(self):
         pass
 
@@ -125,7 +133,7 @@ def socketio_service(request):
 if __name__ == '__main__':
     try:
         T_REX = TRexGaming(TRAIN_DATA_QUEUE, using_cuda=False)
-        T_REX.learning()
+        T_REX.learning(checkpoint='t-rex-DQN-5850')
         #print('dist nhau')
         config = Configurator()
         config.add_route('socket_io', 'socket.io/*remaining')

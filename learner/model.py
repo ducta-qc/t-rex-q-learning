@@ -53,7 +53,7 @@ class TRexCNN(object):
             # Build optimizer ops
             global_step = tf.contrib.framework.get_or_create_global_step()
             lrn_rate = tf.train.exponential_decay(
-                                    0.0005,
+                                    1e-5,
                                     global_step,
                                     10000,
                                     0.5,

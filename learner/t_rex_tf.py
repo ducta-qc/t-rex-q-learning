@@ -7,7 +7,7 @@ import os
 import random
 
 class TRexGaming(object):
-    def __init__(self, prepared_queue, batch_size=512, using_cuda=True):
+    def __init__(self, prepared_queue, batch_size=64, using_cuda=True):
         self.prepared_queue = prepared_queue
         self.batch_size = batch_size
         self.using_cuda = using_cuda
@@ -16,7 +16,7 @@ class TRexGaming(object):
         if using_cuda:
             self.dev = "/gpu:0"
 
-    def create_input_tensors(self, batch_size=512, for_training=True):
+    def create_input_tensors(self, batch_size=64, for_training=True):
         curr_state_input = tf.placeholder(tf.float32, shape=[batch_size, 80, 80, 4])
         if not for_training:
             return curr_state_input
@@ -40,7 +40,7 @@ class TRexGaming(object):
                 reward = []
                 next_state = []
                 while i < batch_size:
-                    if len(prepared_queue) < (batch_size * 1.5):
+                    if len(prepared_queue) < 50000:
                         time.sleep(0.5)
                         continue
                     indexes = random.sample(range(len(prepared_queue)), batch_size)
@@ -66,18 +66,14 @@ class TRexGaming(object):
                 #             session=sess)
                 step += 1
                 
-                print("Step %d: %0.3f" % (step, ret_loss))
+                # print("Step %d: %0.3f" % (step, ret_loss))
                 if step >= max_steps:
                     break
-                if step % 50 == 0:
+                if step % 500 == 0:
                     training_saver.save(sess, 't-rex-DQN', global_step=step)
             sess.close()
 
-    @staticmethod
-    def train_thread_t():
-        while(True):
-            time.sleep(1)
-    def learning(self, max_steps=20000, save_steps=500):
+    def learning(self, max_steps=20000000, save_steps=2000, checkpoint=None):
         train_dir = '/tmp/t-rex/train'
         cpkt_dir = '/tmp/t-rex/checkpoint'
 
@@ -89,22 +85,24 @@ class TRexGaming(object):
 
         with tf.Graph().as_default(), tf.device("/cpu:0"):
             # Build tensorflow ops for predicting and training processes
-            inputs = self.create_input_tensors()
+            inputs = self.create_input_tensors(batch_size=self.batch_size)
             self.curr_state_input = self.create_input_tensors(batch_size=1, for_training=False)
             train_op, global_step, loss = self.model.build_train_op(inputs)
             epsilon = tf.train.exponential_decay(
-                                    0.2,
+                                    0.05,
                                     global_step,
-                                    200,
-                                    0.8,
-                                    staircase=False)
+                                    10000,
+                                    0.75,
+                                    staircase=True)
             self.pred_q_value, self.pred_action = \
                 self.model.build_predict_op([self.curr_state_input, epsilon])
 
             training_saver = tf.train.Saver(var_list=None, max_to_keep=10)
-
+            restore_saver = tf.train.Saver()
             self.sess = tf.Session()
             self.sess.run(tf.global_variables_initializer())
+            if checkpoint:
+                restore_saver.restore(self.sess, checkpoint) 
             #TODO restore pre-trained session
             # Start training thread
             lock = threading.Lock()
