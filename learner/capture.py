@@ -31,7 +31,7 @@ GAME_OVER = 0
 GAME_PLAYING = 1
 FRAME_CHANNELS = 4
 T_REX = None
-TURN = 0
+GAME_TURN = 0
 
 class BotNamespace(BaseNamespace, BroadcastMixin):
     def __init__(self, *args, **kwargs):
@@ -40,7 +40,7 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
         self.last_frame_tuple = None
         self.prev_state = None
         self.curr_state = None
-        self.is_learning = False
+        self.debug = True
 
     def decode_action(self, action):
         if action == 'NONE': 
@@ -67,6 +67,7 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
         return s
 
     def on_recv_frame(self, data):
+        global GAME_TURN
         frame = data['frame']
         action = data['action']
         game_status = data['game_status']
@@ -85,12 +86,16 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
         #cv2.imshow('frame', gray_frame)
 
         reward = 0.
-        if game_status == GAME_PLAYING and action == 'JUMP':
+        if game_status == GAME_PLAYING and action == 1:
             reward = -5.
 
+        print_game_turn = False
         if game_status == GAME_OVER:
-            TURN += 1
+            print_game_turn = True
+            GAME_TURN += 1
             reward = -100.
+            # if self.debug and action == 0:
+            #     scipy.misc.imsave('outfile.png', gray_frame)
             
         self.frame_queue.append((resized_frame, action, reward))
 
@@ -114,10 +119,12 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
                 self.prev_state = None
                 self.curr_state = None
                 self.frame_queue = []
+
+            if GAME_TURN > 0 and GAME_TURN % 5 == 0 and print_game_turn:
+                print("Game turn:%d" % GAME_TURN)
+
             self.emit('recv_action', {"action": next_action})
 
-        if TURN % 5 == 0:
-            print("Game turn:%d" % TURN)
 
     def recv_connect(self):
         pass
@@ -133,7 +140,7 @@ def socketio_service(request):
 if __name__ == '__main__':
     try:
         T_REX = TRexGaming(TRAIN_DATA_QUEUE, using_cuda=False)
-        T_REX.learning(checkpoint='t-rex-DQN-5850')
+        T_REX.learning()
         #print('dist nhau')
         config = Configurator()
         config.add_route('socket_io', 'socket.io/*remaining')

@@ -65,15 +65,15 @@ class TRexGaming(object):
                 #train_op.run(feed_dict={inputs[0]:curr_state, inputs[1]:action, inputs[2]:reward, inputs[3]:next_state},
                 #             session=sess)
                 step += 1
-                
-                # print("Step %d: %0.3f" % (step, ret_loss))
+                if step % 50 == 0:
+                    print("Step %d: %0.3f" % (step, ret_loss))
                 if step >= max_steps:
                     break
-                if step % 500 == 0:
+                if step % save_steps == 0:
                     training_saver.save(sess, 't-rex-DQN', global_step=step)
             sess.close()
 
-    def learning(self, max_steps=20000000, save_steps=2000, checkpoint=None):
+    def learning(self, max_steps=20000000, save_steps=1000, checkpoint=None):
         train_dir = '/tmp/t-rex/train'
         cpkt_dir = '/tmp/t-rex/checkpoint'
 
@@ -89,11 +89,11 @@ class TRexGaming(object):
             self.curr_state_input = self.create_input_tensors(batch_size=1, for_training=False)
             train_op, global_step, loss = self.model.build_train_op(inputs)
             epsilon = tf.train.exponential_decay(
-                                    0.05,
+                                    0.075,
                                     global_step,
                                     10000,
                                     0.75,
-                                    staircase=True)
+                                    staircase=False)
             self.pred_q_value, self.pred_action = \
                 self.model.build_predict_op([self.curr_state_input, epsilon])
 
@@ -119,6 +119,7 @@ class TRexGaming(object):
             q_value, action = self.sess.run(
                                     [self.pred_q_value, self.pred_action],
                                     feed_dict={self.curr_state_input:curr_state})
+            #print(q_value, action)
         return action
 
     def restart(self):

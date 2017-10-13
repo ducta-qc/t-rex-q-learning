@@ -52,13 +52,8 @@ class TRexCNN(object):
 
             # Build optimizer ops
             global_step = tf.contrib.framework.get_or_create_global_step()
-            lrn_rate = tf.train.exponential_decay(
-                                    1e-5,
-                                    global_step,
-                                    10000,
-                                    0.5,
-                                    staircase=True)
-            optimizer = tf.train.RMSPropOptimizer(lrn_rate, 0.99, 0.0, 1e-6)
+            lrn_rate = 1e-5
+            optimizer = tf.train.AdamOptimizer(lrn_rate)
             grads = optimizer.compute_gradients(loss)
             apply_gradient_op = optimizer.apply_gradients(grads, global_step=global_step)
 
