@@ -22,7 +22,7 @@ class TRexCNN(object):
             coin = tf.random_uniform((), minval=0., maxval=1.)
             cond = tf.less(coin, epsilon)
             action = tf.cond(cond, 
-                            lambda: tf.to_int64(tf.floor(tf.random_uniform((), minval=0., maxval=1.)*3)),
+                            lambda: tf.to_int64(tf.floor(tf.random_uniform((), minval=0., maxval=1.)*2)),
                             lambda: tf.to_int64(tf.argmax(q_value, axis=1)))
         return q_value, action
 
@@ -53,12 +53,12 @@ class TRexCNN(object):
             # Build optimizer ops
             global_step = tf.contrib.framework.get_or_create_global_step()
             lrn_rate = tf.train.exponential_decay(
-                                    0.001,
+                                    0.0005,
                                     global_step,
                                     10000,
                                     0.5,
                                     staircase=True)
-            optimizer = tf.train.GradientDescentOptimizer(lrn_rate)
+            optimizer = tf.train.RMSPropOptimizer(lrn_rate, 0.99, 0.0, 1e-6)
             grads = optimizer.compute_gradients(loss)
             apply_gradient_op = optimizer.apply_gradients(grads, global_step=global_step)
 
@@ -84,7 +84,7 @@ class TRexCNN(object):
             x = tf.reshape(x, [-1, flat_size])
             x = slim.fully_connected(x, 256, 
                                 activation_fn=tf.nn.relu, scope='fc1')
-            x = slim.fully_connected(x, 3, 
+            x = slim.fully_connected(x, 2, 
                                 activation_fn=None, scope='fc2')
 
         if not self.reuse: 

@@ -26,7 +26,7 @@ KEYCODES = {
 }
 
 FRAME_QUEUE = []
-TRAIN_DATA_QUEUE = Queue.Queue()
+TRAIN_DATA_QUEUE = []
 GAME_OVER = 0
 GAME_PLAYING = 1
 FRAME_CHANNELS = 4
@@ -44,26 +44,26 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
     def decode_action(self, action):
         if action == 'NONE': 
             return 0
-        elif action == 'JUMP': 
+        if action == 'JUMP': 
             return 1
-        else: #action == 'DUCK'
-            return 2
+        # else: #action == 'DUCK'
+        #     return 2
 
     def encode_action(self, action):
         if action == 0:
             return 0
-        elif action == 1:
+        if action == 1:
             return '38' # Javascript keyCode for the up arrow key
-        else:
-            return '40' # Javascript keyCode for the down arrow key
+        # else:
+        #     return '40' # Javascript keyCode for the down arrow key
 
     def combine_frames(self, frames):
         c0 = frames[0][0]
         c1 = frames[1][0]
         c2 = frames[2][0]
         c3 = frames[3][0]
-        test = np.stack([c0, c1, c2, c3], axis=2)
-        return test
+        s = np.stack([c0, c1, c2, c3], axis=2)
+        return s
 
     def on_recv_frame(self, data):
         frame = data['frame']
@@ -86,7 +86,7 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
         reward = 0.
         if game_status == GAME_OVER:
             reward = -100.
-            print('reward', reward)
+            #print('reward', reward)
         self.frame_queue.append((resized_frame, action, reward))
 
         if len(self.frame_queue) == 4:
@@ -94,7 +94,7 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
             self.curr_state = self.combine_frames(self.frame_queue)
 
             if not self.prev_state is None:
-                TRAIN_DATA_QUEUE.put([self.prev_state, action, reward, self.curr_state])
+                TRAIN_DATA_QUEUE.append([self.prev_state, action, reward, self.curr_state])
 
             self.frame_queue.pop(0)
 
@@ -102,7 +102,7 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
             if game_status == GAME_PLAYING:
                 ext_curr_state = self.curr_state[np.newaxis,:,:,:]
                 next_action = int(T_REX.take_a_action(ext_curr_state))
-                print('next_action', next_action)
+                #print('next_action', next_action)
                 next_action = self.encode_action(next_action)
             else:
                 next_action = "13"
@@ -126,6 +126,7 @@ if __name__ == '__main__':
     try:
         T_REX = TRexGaming(TRAIN_DATA_QUEUE, using_cuda=False)
         T_REX.learning()
+        #print('dist nhau')
         config = Configurator()
         config.add_route('socket_io', 'socket.io/*remaining')
         config.add_view(socketio_service, route_name='socket_io')

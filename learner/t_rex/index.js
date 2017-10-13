@@ -735,7 +735,7 @@
             }
 
             if (this.playing && !this.crashed && Runner.keycodes.DUCK[e.keyCode]) {
-                if (BOT) this.currAction = "DUCK";
+                //if (BOT) this.currAction = "DUCK";
                 
                 e.preventDefault();
                 if (this.tRex.jumping) {
@@ -763,7 +763,7 @@
                 if (BOT) this.currAction = "JUMP";
                 this.tRex.endJump();
             } else if (Runner.keycodes.DUCK[keyCode]) {
-                if (BOT) this.currAction = "DUCK";
+                //if (BOT) this.currAction = "DUCK";
                 this.tRex.speedDrop = false;
                 this.tRex.setDuck(false);
             } else if (this.crashed) {
