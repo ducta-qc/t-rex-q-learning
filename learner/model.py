@@ -31,7 +31,8 @@ class TRexCNN(object):
         action = inputs[1]
         reward = inputs[2]
         next_state = inputs[3]
-        
+        terminal = inputs[4]
+
         with tf.device(self.dev):
             current_q_values = self._calc_q_value(current_state, reuse=self.reuse)
             idx = tf.range(0, current_q_values.shape[0]) * current_q_values.shape[1] + action
@@ -46,13 +47,13 @@ class TRexCNN(object):
             next_q_value = tf.gather(tf.reshape(next_q_values, [-1]), idx)
 
             # Caculating loss function
-            tt = reward + next_q_value * self.discount
+            tt = reward + tf.to_float(1 - terminal) * next_q_value * self.discount
             tq = tf.square(current_q_value - tt)
             loss = tf.reduce_mean(tq)
 
             # Build optimizer ops
             global_step = tf.contrib.framework.get_or_create_global_step()
-            lrn_rate = 1e-5
+            lrn_rate = 1e-4
             optimizer = tf.train.AdamOptimizer(lrn_rate)
             grads = optimizer.compute_gradients(loss)
             apply_gradient_op = optimizer.apply_gradients(grads, global_step=global_step)

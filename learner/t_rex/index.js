@@ -392,6 +392,7 @@
             if(BOT){
                 this.botSocket = io.connect('/bot');
                 this.currAction = "NONE";
+                // this.recvControl = false;
             }
 
             this.startListening();
@@ -532,9 +533,14 @@
             var deltaTime = now - (this.time || now);
             this.time = now;
             if (this.playing) {
+                if (BOT) {
+                    // if (!this.recvControl) {
+                    //     console.log('fuck you');
+                    //     return;
+                    // }
+                }
                 var frData = this.canvas.toDataURL("image/png");
                 var gameStatus = 1;
-                //this.botSocket.emit("recv_frame", "test_data");
                     
                 this.clearCanvas();
 
@@ -576,8 +582,9 @@
 
                 if (BOT){
                     this.botSocket.emit("recv_frame", 
-                        {frame: frData, action: this.currAction,game_status: gameStatus});
+                        {frame: frData, action: this.currAction,game_status: gameStatus,t_rex_status:this.tRex.jumping});
                     this.currAction = "NONE";
+                    // this.recvControl = false;
                 }
 
                 var playAchievementSound = this.distanceMeter.update(deltaTime,
@@ -648,8 +655,10 @@
             Object.defineProperty(keydown_event, "keyCode", {"value" : action});
 
             delete keyup_event.keyCode;
-            Object.defineProperty(keyup_event, "keyCode", {"value" : action})
-
+            Object.defineProperty(keyup_event, "keyCode", {"value" : action});
+            // if(BOT){
+            //     this.recvControl = true;
+            // }
             document.dispatchEvent(keydown_event);
             document.dispatchEvent(keyup_event);
         },
