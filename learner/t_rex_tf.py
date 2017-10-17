@@ -32,7 +32,7 @@ class TRexGaming(object):
                      save_steps, training_saver, dev, lock):
         step = 0
         wait_full_replay_mem = True
-        relay_size = 10000
+        relay_size = 20000
         with tf.device(dev):
             while(True):
                 if step==0 : time.sleep(1)
@@ -111,7 +111,7 @@ class TRexGaming(object):
             self.sess = tf.Session()
             self.sess.run(tf.global_variables_initializer())
             if checkpoint:
-                restore_saver = tf.train.Saver()
+                restore_saver = tf.train.Saver(var_list=tf.trainable_variables() + [global_step,])
                 restore_saver.restore(self.sess, checkpoint) 
             # TODO restore pre-trained session
             # Start training thread

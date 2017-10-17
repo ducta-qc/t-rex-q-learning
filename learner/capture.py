@@ -17,7 +17,7 @@ import Queue
 from t_rex_tf import TRexGaming
 import threading
 import scipy.misc
-
+import random
 
 KEYCODES = {
     'JUMP': ['38', '32'],
@@ -32,7 +32,7 @@ GAME_PLAYING = 1
 FRAME_CHANNELS = 4
 T_REX = None
 GAME_TURN = 0
-REPLAY_SIZE = 10000
+REPLAY_SIZE = 20000
 NUM_FRAME = 0
 NUM_FRAME_SKIP = 5
 
@@ -137,7 +137,12 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
 
             if not self.prev_state is None:
                 if len(TRAIN_DATA_QUEUE) > REPLAY_SIZE:
-                    TRAIN_DATA_QUEUE.pop(0)
+                    if TRAIN_DATA_QUEUE[0][-1] != 1:
+                        TRAIN_DATA_QUEUE.pop(0)
+                    else:
+                        ep = random.random()
+                        if ep < 0.5:
+                            TRAIN_DATA_QUEUE.pop(0)
                 
                 # if self.dispatch_action == 'JUMP':
                 #     scipy.misc.imsave('prev%d.png' % NUM_FRAME, self.frame_queue[2])
@@ -202,7 +207,7 @@ def socketio_service(request):
 if __name__ == '__main__':
     try:
         T_REX = TRexGaming(TRAIN_DATA_QUEUE, using_cuda=False)
-        T_REX.learning()
+        T_REX.learning(checkpoint="t-rex-DQN-15000")
         #print('dist nhau')
         config = Configurator()
         config.add_route('socket_io', 'socket.io/*remaining')
