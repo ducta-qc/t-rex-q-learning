@@ -32,7 +32,7 @@ class TRexGaming(object):
                      save_steps, training_saver, dev, lock):
         step = 0
         wait_full_replay_mem = True
-        relay_size = 20000
+        relay_size = 300
         with tf.device(dev):
             while(True):
                 if step==0 : time.sleep(1)
@@ -44,7 +44,7 @@ class TRexGaming(object):
                 terminal = []
                     
                 if len(prepared_queue) <= relay_size and wait_full_replay_mem:
-                    print("Delay mem:%d" % len(prepared_queue))
+                    print("Relay memory:%d" % len(prepared_queue))
                     if len(prepared_queue) == relay_size:
                         wait_full_replay_mem = False
                     continue

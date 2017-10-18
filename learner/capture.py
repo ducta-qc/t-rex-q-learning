@@ -32,9 +32,8 @@ GAME_PLAYING = 1
 FRAME_CHANNELS = 4
 T_REX = None
 GAME_TURN = 0
-REPLAY_SIZE = 20000
+REPLAY_SIZE = 300
 NUM_FRAME = 0
-NUM_FRAME_SKIP = 5
 
 class BotNamespace(BaseNamespace, BroadcastMixin):
     def __init__(self, *args, **kwargs):
@@ -46,10 +45,7 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
         self.curr_state = None
         self.debug = True
         self.emit_action = True
-        self.skip = 0
-        self.skip_frame = False
         self.dispatch_action = 'NONE'
-        self.num_skip = NUM_FRAME_SKIP
 
     def decode_action(self, action):
         if action == 'NONE': 
@@ -109,13 +105,8 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
             #     scipy.misc.imsave('outfile%d.png' % GAME_TURN, gray_frame)
 
         # Skipping frames
-        if self.skip_frame and game_status != GAME_OVER:
-            self.skip += 1
-            if self.skip > NUM_FRAME_SKIP:
-                self.skip_frame = False
+        if t_rex_status == 1 and game_status != GAME_OVER:
             return None
-        self.skip_frame = True
-        self.skip = 0
 
         # if self.debug:
         #     scipy.misc.imsave('outfile%d-%s-%d.png' % (NUM_FRAME, self.dispatch_action, t_rex_status), gray_frame)
@@ -140,9 +131,11 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
                     if TRAIN_DATA_QUEUE[0][-1] != 1:
                         TRAIN_DATA_QUEUE.pop(0)
                     else:
+                        first = TRAIN_DATA_QUEUE.pop(0)
                         ep = random.random()
                         if ep < 0.5:
-                            TRAIN_DATA_QUEUE.pop(0)
+                            TRAIN_DATA_QUEUE.append(first)
+                            
                 
                 # if self.dispatch_action == 'JUMP':
                 #     scipy.misc.imsave('prev%d.png' % NUM_FRAME, self.frame_queue[2])
@@ -163,26 +156,16 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
                 ext_curr_state = self.curr_state[np.newaxis,:,:,:]
                 qvalue, next_action = T_REX.take_a_action(ext_curr_state)
                 next_action = int(next_action)
-                if t_rex_status == 1: # t_rex is jumping, next action is None
-                    next_action = 0
-                if next_action == 0:
-                    self.num_skip = 0
-                if next_action == 1:
-                    self.num_skip = NUM_FRAME_SKIP
-                
                 self.dispatch_action = self.num_to_action(next_action)
                 #print('qvalue:', qvalue.tolist(), 'action:', next_action)
                 next_action = self.encode_action(next_action)
             else:
                 next_action = "13"
-                self.num_skip = NUM_FRAME_SKIP
                 self.dispatch_action = 'JUMP'
                 self.prev_state = None
                 self.curr_state = None
                 self.frame_queue = []
                 self.raw_frame_queue = []
-                self.skip = 0
-                self.skip_frame = False
 
             if GAME_TURN > 0 and GAME_TURN % 5 == 0 and print_game_turn:
                 print("Game turn:%d" % GAME_TURN)
@@ -193,7 +176,6 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
 
     def recv_connect(self):
         self.dispatch_action = 'JUMP'
-        self.num_skip = NUM_FRAME_SKIP
         self.emit('recv_action', {"action": "38"})
 
 
@@ -207,7 +189,7 @@ def socketio_service(request):
 if __name__ == '__main__':
     try:
         T_REX = TRexGaming(TRAIN_DATA_QUEUE, using_cuda=False)
-        T_REX.learning(checkpoint="t-rex-DQN-15000")
+        T_REX.learning()
         #print('dist nhau')
         config = Configurator()
         config.add_route('socket_io', 'socket.io/*remaining')

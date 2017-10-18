@@ -13,6 +13,16 @@ class TRexCNN(object):
             self.dev = "/gpu:0"
         pass
 
+    @staticmethod
+    def smooth_l1_dist(deltas, sigma=3., name='smooth_l1_dist'):
+        with tf.name_scope(name=name):
+            sigma2 = sigma ** 2
+            deltas_abs = tf.abs(deltas)
+            smooth_l1_sign = tf.cast(tf.less(deltas_abs, 1. / sigma2), tf.float32)
+            return tf.square(deltas) * 0.5 * sigma2 * smooth_l1_sign + \
+                   (deltas_abs - 0.5 / sigma2) * tf.abs(smooth_l1_sign - 1)
+
+
     def build_predict_op(self, inputs):
         current_state = inputs[0]
         epsilon = inputs[1]
@@ -48,12 +58,12 @@ class TRexCNN(object):
 
             # Caculating loss function
             tt = reward + tf.to_float(1 - terminal) * next_q_value * self.discount
-            tq = tf.square(current_q_value - tt)
+            tq = TRexCNN.smooth_l1_dist(current_q_value - tt)
             loss = tf.reduce_mean(tq)
 
             # Build optimizer ops
             global_step = tf.contrib.framework.get_or_create_global_step()
-            lrn_rate = 1e-4
+            lrn_rate = 1e-6
             optimizer = tf.train.AdamOptimizer(lrn_rate)
             grads = optimizer.compute_gradients(loss)
             apply_gradient_op = optimizer.apply_gradients(grads, global_step=global_step)
