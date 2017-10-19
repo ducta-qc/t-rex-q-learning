@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import sys
+import tensorflow as tf
 from wsgiref.simple_server import make_server
 from socketio.server import SocketIOServer
 from pyramid.paster import get_app
@@ -18,7 +19,16 @@ from t_rex_tf import TRexGaming
 import threading
 import scipy.misc
 import random
-
+from collections import deque
+FLAGS = tf.app.flags.FLAGS
+tf.app.flags.DEFINE_string("checkpoint", None, "Path of checkpoint file")
+tf.app.flags.DEFINE_string("mode","learn", "Learn or play")
+tf.app.flags.DEFINE_float("epsilon", 0.075, "Epsilon greedy initial value")
+tf.app.flags.DEFINE_float("lrn_rate", 1e-6, "Initial learning rate")
+tf.app.flags.DEFINE_boolean("using_cuda", True, "Use single GPU for running")
+tf.app.flags.DEFINE_float("discount", 0.95, "Discount factor")
+tf.app.flags.DEFINE_integer("batch_size", 32, "Batch size for a learning step")
+tf.app.flags.DEFINE_integer("replay_size", 50000, "Replay memory size")
 KEYCODES = {
     'JUMP': ['38', '32'],
     'DUCK': ['40'],
@@ -26,13 +36,12 @@ KEYCODES = {
 }
 
 FRAME_QUEUE = []
-TRAIN_DATA_QUEUE = []
+TRAIN_DATA_QUEUE = deque()
 GAME_OVER = 0
 GAME_PLAYING = 1
 FRAME_CHANNELS = 4
 T_REX = None
 GAME_TURN = 0
-REPLAY_SIZE = 300
 NUM_FRAME = 0
 
 class BotNamespace(BaseNamespace, BroadcastMixin):
@@ -79,7 +88,7 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
         return s
 
     def on_recv_frame(self, data):
-        global GAME_TURN, NUM_FRAME
+        global GAME_TURN, NUM_FRAME, T_REX
         frame = data['frame']
         #action = data['action']
         game_status = data['game_status']
@@ -96,28 +105,18 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
 
         print_game_turn = False
         terminal = 0
+        reward = 0.
         if game_status == GAME_OVER:
             print_game_turn = True
             GAME_TURN += 1
             reward = -100.
             terminal = 1
-            # if self.debug and action == 0:
-            #     scipy.misc.imsave('outfile%d.png' % GAME_TURN, gray_frame)
 
-        # Skipping frames
+        # Skipping jumping frames
         if t_rex_status == 1 and game_status != GAME_OVER:
             return None
 
-        # if self.debug:
-        #     scipy.misc.imsave('outfile%d-%s-%d.png' % (NUM_FRAME, self.dispatch_action, t_rex_status), gray_frame)
-
-        #action = self.decode_action(action)
         NUM_FRAME += 1
-        # cv2.imshow('frame', gray_frame)
-
-        reward = 0.
-        # if game_status == GAME_PLAYING and action == 1:
-        #     reward = -2.
 
         self.frame_queue.append(resized_frame)
         self.raw_frame_queue.append(gray_frame)
@@ -126,27 +125,23 @@ class BotNamespace(BaseNamespace, BroadcastMixin):
             self.prev_state = self.curr_state
             self.curr_state = self.combine_frames(self.frame_queue)
 
-            if not self.prev_state is None:
-                if len(TRAIN_DATA_QUEUE) > REPLAY_SIZE:
-                    if TRAIN_DATA_QUEUE[0][-1] != 1:
-                        TRAIN_DATA_QUEUE.pop(0)
-                    else:
-                        first = TRAIN_DATA_QUEUE.pop(0)
-                        ep = random.random()
-                        if ep < 0.5:
-                            TRAIN_DATA_QUEUE.append(first)
-                            
-                
-                # if self.dispatch_action == 'JUMP':
-                #     scipy.misc.imsave('prev%d.png' % NUM_FRAME, self.frame_queue[2])
-                #     scipy.misc.imsave('current%d.png' % NUM_FRAME, self.frame_queue[3])
+            if FLAGS.mode == "learn":
+                if not self.prev_state is None:
+                    if len(TRAIN_DATA_QUEUE) > FLAGS.replay_size:
+                        if TRAIN_DATA_QUEUE[0][-1] != 1:
+                            TRAIN_DATA_QUEUE.popleft(0)
+                        else:
+                            first = TRAIN_DATA_QUEUE.popleft(0)
+                            ep = random.random()
+                            if ep < 0.5:
+                                TRAIN_DATA_QUEUE.append(first)
 
-                TRAIN_DATA_QUEUE.append([
-                        self.prev_state, 
-                        self.decode_action(self.dispatch_action), 
-                        reward, 
-                        self.curr_state, 
-                        terminal])
+                    TRAIN_DATA_QUEUE.append([
+                            self.prev_state, 
+                            self.decode_action(self.dispatch_action), 
+                            reward, 
+                            self.curr_state, 
+                            terminal])
 
             self.raw_frame_queue.pop(0)
             self.frame_queue.pop(0)
@@ -188,14 +183,18 @@ def socketio_service(request):
 
 if __name__ == '__main__':
     try:
-        T_REX = TRexGaming(TRAIN_DATA_QUEUE, using_cuda=False)
-        T_REX.learning()
-        #print('dist nhau')
+        T_REX = TRexGaming(
+            TRAIN_DATA_QUEUE, 
+            batch_size=FLAGS.batch_size,
+            mode=FLAGS.mode,
+            discount=FLAGS.discount,
+            epsilon=FLAGS.epsilon,
+            using_cuda=FLAGS.using_cuda,
+            replay_size=FLAGS.replay_size)
+        T_REX.running(checkpoint=FLAGS.checkpoint)
         config = Configurator()
         config.add_route('socket_io', 'socket.io/*remaining')
         config.add_view(socketio_service, route_name='socket_io')
-        #config.add_route('recv_frame', 'recv/')
-        #config.add_view(recv_game_frame, route_name='recv_frame', request_method='POST')
         config.add_static_view('/', 't_rex')
         app = config.make_wsgi_app()
 
@@ -203,7 +202,6 @@ if __name__ == '__main__':
                        resource="socket.io", policy_server=True,
                        policy_listener=('0.0.0.0', 10843)).serve_forever()
 
-        # create named window
-        #server.serve_forever()
     except KeyboardInterrupt:
         sys.exit(0)
+    
